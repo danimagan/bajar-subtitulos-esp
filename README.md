@@ -6,7 +6,7 @@ el trabajo de forma autónoma.
 
 Basta con pedirle a Claude *"baja subtítulos"* en una carpeta: busca todos los vídeos,
 mira primero si el propio archivo trae subtítulos en castellano, si no los busca en internet,
-**comprueba leyendo el texto** que de verdad son castellano (y no latino mal etiquetado) y deja
+**comprueba leyendo el texto** que son castellano de España (y no latino mal etiquetado) y deja
 un `.srt` junto a cada vídeo con su mismo nombre, listo para que el reproductor lo cargue solo.
 
 ## Características

@@ -10,7 +10,7 @@ Nunca se sustituye un .srt por otro de un tipo peor.
 
 Primero mira las pistas de texto incrustadas en el vídeo (MKV y MP4, sin ffmpeg); si no
 hay castellano, busca en todos los proveedores útiles, descarga todos los candidatos en
-español y elige solo los que son de verdad castellano (por vocabulario), del episodio
+español y elige solo los que son castellano de España (por vocabulario), del episodio
 correcto y con una duración compatible con el vídeo. Las etiquetas de idioma de las webs
 NO son fiables (se han visto latinos marcados como "es" y episodios mal etiquetados), por
 eso se comprueba el texto.
