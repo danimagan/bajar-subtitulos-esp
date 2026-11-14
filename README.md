@@ -11,7 +11,7 @@ un `.srt` junto a cada vídeo con su mismo nombre, listo para que el reproductor
 
 ## Características
 
-- **Castellano de verdad, no latino.** Las etiquetas de idioma de las webs no son fiables
+- **Castellano de España, no latino.** Las etiquetas de idioma de las webs no son fiables
   (latinos marcados como "es", episodios mal subidos). El script decide el dialecto por el
   vocabulario: `vosotros`, `os`, `vale`, `chaval`, `-áis/-éis`… frente a `ustedes`,
   `computadora`, `celular`, `carro`, `ahorita`…
