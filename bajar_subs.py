@@ -2,7 +2,7 @@
 
 Uso:
     python -I bajar_subs.py <carpeta_o_video> [--force] [--solo-castellano] [--sin-ingles]
-                            [--ingles] [--dry-run] [--max-videos N]
+                            [--ingles] [--dry-run] [--max-videos N] [--max-descargas N]
 
 El subtítulo principal se guarda como <video>.srt (mismo nombre que el vídeo), para que
 cualquier reproductor lo cargue solo. Orden de preferencia: castellano > latino > inglés.
@@ -48,7 +48,7 @@ MP4_EXT = {'.mp4', '.m4v', '.mov'}
 PROVIDERS = ['opensubtitles', 'addic7ed', 'gestdown', 'subtitulamos']
 # Límites para no saturar a los proveedores con búsquedas masivas.
 MAX_VIDEOS = 40     # vídeos que buscan en internet por ejecución (--max-videos; 0 = sin límite)
-MAX_DESCARGAS = 10  # candidatos en español que se descargan por vídeo
+MAX_DESCARGAS = 5   # candidatos que se descargan por vídeo (--max-descargas; 0 = sin límite)
 PAUSA = 3           # segundos de espera entre un vídeo que busca en internet y el siguiente
 
 ES_RE = re.compile(
@@ -571,7 +571,7 @@ def ingles_incrustado(path):
     return (texto or None), f'pista {pistas[0]["num"]} {pistas[0]["name"]}'.strip()
 
 
-def ingles_proveedores(pool, video, max_descargas=8):
+def ingles_proveedores(pool, video, max_descargas=MAX_DESCARGAS):
     """Busca subtítulos en inglés; descarga por orden de puntuación hasta encontrar uno válido."""
     candidatos = pool.list_subtitles(video, {Language('eng')})
     candidatos.sort(key=lambda s: compute_score(s, video), reverse=True)
@@ -642,9 +642,15 @@ def main():
                     help=f'máximo de vídeos que buscan en internet por ejecución (por defecto '
                          f'{MAX_VIDEOS}; 0 = sin límite). Los que ya tienen castellano o lo traen '
                          f'incrustado no cuentan. El resto queda como PENDIENTE (límite)')
+    ap.add_argument('--max-descargas', type=int, default=MAX_DESCARGAS, metavar='N',
+                    help=f'máximo de candidatos que se descargan por vídeo (por defecto '
+                         f'{MAX_DESCARGAS}; 0 = sin límite), elegidos por sincronía y '
+                         f'puntuación alternando proveedores')
     args = ap.parse_args()
-    if args.max_videos < 0:
-        ap.error('--max-videos debe ser 0 (sin límite) o un número positivo')
+    for opcion in ('max_videos', 'max_descargas'):
+        if getattr(args, opcion) < 0:
+            ap.error(f"--{opcion.replace('_', '-')} debe ser 0 (sin límite) o un número positivo")
+    max_descargas = args.max_descargas or None  # None: sin límite
     if args.dry_run:
         global guardar
         guardar = lambda texto, destino: print(f'  [dry-run] guardaría {destino.name}')
@@ -718,12 +724,12 @@ def main():
             refine(video, refiners=['hash', 'metadata', 'tvdb'])
 
             candidatos = pool.list_subtitles(video, {Language('spa')})
-            if len(candidatos) > MAX_DESCARGAS:
-                print(f'  {len(candidatos)} candidatos en español: se descargan los {MAX_DESCARGAS} '
+            if max_descargas and len(candidatos) > max_descargas:
+                print(f'  {len(candidatos)} candidatos en español: se descargan los {max_descargas} '
                       f'mejores, alternando proveedores', flush=True)
             castellanos, latinos = [], []
             vistos = set()
-            for sub in mejores_candidatos(candidatos, video, MAX_DESCARGAS):
+            for sub in mejores_candidatos(candidatos, video, max_descargas):
                 if not pool.download_subtitle(sub) or not sub.content:
                     continue
                 texto = sub.text
@@ -765,7 +771,7 @@ def main():
                 if texto:
                     aplicar('ingles', texto, 'INGLÉS (incrustado)', pista[:30])
                     continue
-                texto, sub = ingles_proveedores(pool, video)
+                texto, sub = ingles_proveedores(pool, video, max_descargas)
                 if texto:
                     aplicar('ingles', texto, 'INGLÉS', f'{sub.provider_name} {sub.id}')
                 else:

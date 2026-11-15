@@ -64,12 +64,13 @@ Windows, `%USERPROFILE%`), así que funcionan en cualquier equipo sin tocar nada
    `--solo-castellano` (no guarda latino aunque no haya castellano), `--sin-ingles` (no baja
    inglés cuando no hay nada en español), `--ingles` (además extrae la pista inglesa incrustada,
    prefiriendo SDH, como `.en.srt` adicional), `--max-videos N` (límite de vídeos que buscan
-   en internet; por defecto 40, `0` = sin límite). Las carpetas grandes pueden tardar varios
+   en internet; por defecto 40, `0` = sin límite), `--max-descargas N` (candidatos que se
+   descargan por vídeo; por defecto 5, `0` = sin límite). Las carpetas grandes pueden tardar varios
    minutos: usa un timeout de 10 min o ejecútalo en segundo plano si tu entorno lo permite.
    **Límites para no saturar a los proveedores**: como mucho 40 vídeos buscan en internet por
    ejecución (los que ya tienen castellano o lo traen incrustado no cuentan), se descargan como
-   mucho 10 candidatos por vídeo (alternando proveedores) y hay una pausa de 3 s entre vídeos.
-   **No subas `--max-videos` ni lo pongas a `0` por tu cuenta**: solo si el usuario lo pide
+   mucho 5 candidatos por vídeo (alternando proveedores; también al buscar inglés) y hay una pausa de 3 s entre vídeos.
+   **No subas `--max-videos` ni `--max-descargas`, ni los pongas a `0`, por tu cuenta**: solo si el usuario lo pide
    expresamente.
    Si el sandbox del agente bloquea la red, pide permiso para ejecutarlo con acceso a
    internet (los proveedores de subtítulos lo necesitan).

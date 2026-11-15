@@ -47,7 +47,7 @@ un `.srt` junto a cada vídeo con su mismo nombre, listo para que el reproductor
   reemplaza en `~/.subtitulos-esp/backup`.
 - **Respetuoso con los proveedores**: como mucho 40 vídeos buscan en internet por ejecución
   (los que ya tienen castellano o lo traen incrustado no cuentan; el resto queda como
-  `PENDIENTE (límite)` para la siguiente), descarga como mucho 10 candidatos por vídeo
+  `PENDIENTE (límite)` para la siguiente), descarga como mucho 5 candidatos por vídeo
   alternando proveedores y hace una pausa de 3 s entre vídeos.
 - **Robusto con nombres raros**: toma el nombre de la serie del archivo y no de la carpeta
   (una carpeta `<SERIE> - FULL` hacía que la serie se buscara como "<SERIE> FULL").
@@ -154,6 +154,7 @@ python -I bajar_subs.py <carpeta_o_video> [opciones]
 | `--sin-ingles`      | No baja inglés cuando no hay nada en español                           |
 | `--ingles`          | Además extrae la pista inglesa incrustada como `<video>.en.srt`        |
 | `--max-videos N`    | Máximo de vídeos que buscan en internet (por defecto 40; `0` = sin límite) |
+| `--max-descargas N` | Máximo de candidatos descargados por vídeo (por defecto 5; `0` = sin límite) |
 
 ## Archivos
 
@@ -171,7 +172,7 @@ los descarga para los vídeos que ya tienes. Cada proveedor tiene sus propias co
 uso; respétalas. OpenSubtitles solo se consulta con tu propia cuenta gratuita de
 [opensubtitles.org](https://www.opensubtitles.org) (sin ella, el script lo omite). No
 lances búsquedas masivas que sobrecarguen los servicios: los límites por defecto (40 vídeos
-por ejecución, 10 descargas por vídeo y una pausa entre vídeos) están para eso; si una
+por ejecución, 5 descargas por vídeo y una pausa entre vídeos) están para eso; si una
 carpeta tiene más, deja que lo pendiente se procese en otra ejecución en lugar de quitar el
 límite.
 
