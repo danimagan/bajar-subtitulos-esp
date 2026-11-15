@@ -2,7 +2,7 @@
 
 Uso:
     python -I bajar_subs.py <carpeta_o_video> [--force] [--solo-castellano] [--sin-ingles]
-                            [--ingles] [--dry-run]
+                            [--ingles] [--dry-run] [--max-videos N]
 
 El subtítulo principal se guarda como <video>.srt (mismo nombre que el vídeo), para que
 cualquier reproductor lo cargue solo. Orden de preferencia: castellano > latino > inglés.
@@ -19,12 +19,14 @@ Credenciales de opensubtitles.org en %USERPROFILE%\\.subtitulos-esp\\credenciale
     {"opensubtitles": {"username": "...", "password": "..."}}
 """
 import argparse
+import itertools
 import json
 import logging
 import re
 import shutil
 import struct
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -44,6 +46,10 @@ MP4_EXT = {'.mp4', '.m4v', '.mov'}
 # podnapisi: el dominio dejó de resolver en 2026 (podnapisi.net sin registro A, www sin DNS).
 # tvsubtitles: la búsqueda (search.php) responde 403 a programas. Además, ambos daban latino.
 PROVIDERS = ['opensubtitles', 'addic7ed', 'gestdown', 'subtitulamos']
+# Límites para no saturar a los proveedores con búsquedas masivas.
+MAX_VIDEOS = 40     # vídeos que buscan en internet por ejecución (--max-videos; 0 = sin límite)
+MAX_DESCARGAS = 10  # candidatos en español que se descargan por vídeo
+PAUSA = 3           # segundos de espera entre un vídeo que busca en internet y el siguiente
 
 ES_RE = re.compile(
     r'\b(vosotr[oa]s|vuestr[oa]s?|os|vale(?!\s+la\s+pena)|chaval\w*|leches|ordenador\w*|móvil\w*'
@@ -78,6 +84,22 @@ def sincronia(sub, video):
     pesos = episode_scores if isinstance(video, Episode) else movie_scores
     coincidencias = sub.get_matches(video)
     return sum(pesos[m] for m in SINCRONIA if m in coincidencias)
+
+
+def mejores_candidatos(candidatos, video, maximo):
+    """Los `maximo` candidatos que merece la pena descargar, alternando proveedores.
+
+    Dentro de cada proveedor se ordenan por sincronía y puntuación, y se van tomando por
+    rondas (el mejor de cada proveedor, luego el segundo...). Así un proveedor con muchos
+    resultados empatados (OpenSubtitles) no deja fuera al mejor de otro (Addic7ed), y la
+    carga se reparte entre servicios.
+    """
+    por_proveedor = {}
+    for sub in sorted(candidatos, key=lambda s: (sincronia(s, video), compute_score(s, video)),
+                      reverse=True):
+        por_proveedor.setdefault(sub.provider_name, []).append(sub)
+    rondas = itertools.zip_longest(*por_proveedor.values())
+    return [sub for ronda in rondas for sub in ronda if sub is not None][:maximo]
 
 
 def dialecto(texto):
@@ -616,7 +638,13 @@ def main():
     ap.add_argument('--dry-run', action='store_true', help='no escribir nada, solo mostrar qué haría')
     ap.add_argument('--ingles', action='store_true',
                     help='además, extraer la pista inglesa incrustada en el vídeo como .en.srt')
+    ap.add_argument('--max-videos', type=int, default=MAX_VIDEOS, metavar='N',
+                    help=f'máximo de vídeos que buscan en internet por ejecución (por defecto '
+                         f'{MAX_VIDEOS}; 0 = sin límite). Los que ya tienen castellano o lo traen '
+                         f'incrustado no cuentan. El resto queda como PENDIENTE (límite)')
     args = ap.parse_args()
+    if args.max_videos < 0:
+        ap.error('--max-videos debe ser 0 (sin límite) o un número positivo')
     if args.dry_run:
         global guardar
         guardar = lambda texto, destino: print(f'  [dry-run] guardaría {destino.name}')
@@ -629,6 +657,7 @@ def main():
     providers = [p for p in PROVIDERS if p != 'opensubtitles' or 'opensubtitles' in configs]
 
     resumen = []
+    buscados = 0  # vídeos que ya han buscado en internet en esta ejecución
     with ProviderPool(providers=providers, provider_configs=configs) as pool:
         for path in buscar_videos(args.ruta):
             destino = path.with_suffix('.srt')
@@ -668,6 +697,16 @@ def main():
                 aplicar('castellano', emb['castellano'][0], 'CASTELLANO (incrustado)', emb['castellano'][1][:30])
                 continue
 
+            # A partir de aquí se busca en internet: límite por ejecución y pausa entre vídeos.
+            if args.max_videos and buscados >= args.max_videos:
+                print(f'  límite de {args.max_videos} vídeos con búsqueda en internet alcanzado: '
+                      f'queda para otra ejecución', flush=True)
+                resumen.append((path.name, 'PENDIENTE (límite)', f'máx. {args.max_videos} por ejecución'))
+                continue
+            if buscados:
+                time.sleep(PAUSA)
+            buscados += 1
+
             video = scan_video(str(path))
             # scan_video adivina sobre la ruta completa: una carpeta como "<SERIE> - FULL"
             # convierte la serie en "<SERIE> FULL" y ningún proveedor encuentra nada.
@@ -679,9 +718,12 @@ def main():
             refine(video, refiners=['hash', 'metadata', 'tvdb'])
 
             candidatos = pool.list_subtitles(video, {Language('spa')})
+            if len(candidatos) > MAX_DESCARGAS:
+                print(f'  {len(candidatos)} candidatos en español: se descargan los {MAX_DESCARGAS} '
+                      f'mejores, alternando proveedores', flush=True)
             castellanos, latinos = [], []
             vistos = set()
-            for sub in candidatos:
+            for sub in mejores_candidatos(candidatos, video, MAX_DESCARGAS):
                 if not pool.download_subtitle(sub) or not sub.content:
                     continue
                 texto = sub.text

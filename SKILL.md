@@ -63,8 +63,14 @@ Windows, `%USERPROFILE%`), así que funcionan en cualquier equipo sin tocar nada
    Opciones: `--dry-run` (no escribe), `--force` (rehace aunque ya haya castellano),
    `--solo-castellano` (no guarda latino aunque no haya castellano), `--sin-ingles` (no baja
    inglés cuando no hay nada en español), `--ingles` (además extrae la pista inglesa incrustada,
-   prefiriendo SDH, como `.en.srt` adicional). Las carpetas grandes pueden tardar varios
+   prefiriendo SDH, como `.en.srt` adicional), `--max-videos N` (límite de vídeos que buscan
+   en internet; por defecto 40, `0` = sin límite). Las carpetas grandes pueden tardar varios
    minutos: usa un timeout de 10 min o ejecútalo en segundo plano si tu entorno lo permite.
+   **Límites para no saturar a los proveedores**: como mucho 40 vídeos buscan en internet por
+   ejecución (los que ya tienen castellano o lo traen incrustado no cuentan), se descargan como
+   mucho 10 candidatos por vídeo (alternando proveedores) y hay una pausa de 3 s entre vídeos.
+   **No subas `--max-videos` ni lo pongas a `0` por tu cuenta**: solo si el usuario lo pide
+   expresamente.
    Si el sandbox del agente bloquea la red, pide permiso para ejecutarlo con acceso a
    internet (los proveedores de subtítulos lo necesitan).
 2. **Primero mira dentro del vídeo**: en `.mkv` y en `.mp4`/`.m4v`/`.mov` el script lee las
@@ -80,7 +86,10 @@ Windows, `%USERPROFILE%`), así que funcionan en cualquier equipo sin tocar nada
 4. Revisa el RESUMEN y díselo al usuario indicando el tipo de cada uno:
    `CASTELLANO`, `CASTELLANO (incrustado)`, `LATINO`, `LATINO (incrustado)`, `INGLÉS`,
    `INGLÉS (incrustado)`, `ya tenía castellano`, `LATINO (ya tenía .srt)`,
-   `INGLÉS (ya tenía .srt)` o `NO ENCONTRADO` (ni español ni inglés). El script detecta el
+   `INGLÉS (ya tenía .srt)`, `NO ENCONTRADO` (ni español ni inglés) o `PENDIENTE (límite)`
+   (no se buscó porque se alcanzó el límite de vídeos: dile al usuario cuántos quedan y que
+   vuelva a lanzar la skill más tarde; la siguiente ejecución sigue donde se quedó, porque se
+   salta lo que ya tiene castellano). El script detecta el
    idioma del `.srt` que ya hay leyendo el texto: si es latino o inglés, vuelve a buscar
    castellano en cada ejecución y lo sustituye cuando aparece (suele ser días después del
    estreno, sobre todo en Addic7ed).
