@@ -1,0 +1,195 @@
+"""Pruebas de seguridad de bajar_subs.py con vídeos y textos construidos a mano.
+
+Comprueban que los vídeos válidos se siguen leyendo igual y que los corruptos o manipulados
+terminan enseguida con ArchivoInvalido, sin colgarse ni agotar la memoria.
+
+Uso (con el Python del venv de la skill):
+    python -I tests/test_seguridad.py
+"""
+import struct
+import sys
+import tempfile
+import threading
+import unittest
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+import bajar_subs as b  # noqa: E402
+
+LIMITE_SEGUNDOS = 10
+TEXTO = 'Vale, tío, ¿qué hacéis vosotros aquí?'
+
+
+# ---------- Construcción de archivos ----------
+
+def _tam_ebml(n):
+    return b'\x01' + n.to_bytes(7, 'big')        # tamaño EBML de 8 bytes
+
+
+def _el(eid, datos):
+    return eid.to_bytes((eid.bit_length() + 7) // 8, 'big') + _tam_ebml(len(datos)) + datos
+
+
+def _cabecera_ebml():
+    return _el(0x1A45DFA3, _el(0x4282, b'matroska'))
+
+
+def mkv_valido():
+    pista = _el(0xAE, _el(0xD7, b'\x01') + _el(0x86, b'S_TEXT/UTF8') + _el(0x22B59C, b'spa')
+                + _el(0x536E, 'Español (España)'.encode()))
+    bloque = b'\x81\x00\x00\x00' + TEXTO.encode()   # pista 1, tiempo 0, sin flags
+    cluster = _el(0x1F43B675, _el(0xE7, b'\x00')
+                  + _el(0xA0, _el(0xA1, bloque) + _el(0x9B, (2000).to_bytes(2, 'big'))))
+    return _cabecera_ebml() + _el(0x18538067, _el(0x1654AE6B, pista) + cluster)
+
+
+def mkv_cortado():
+    """La cabecera de pistas declara más datos de los que hay: antes, bucle infinito."""
+    return (_cabecera_ebml() + b'\x18\x53\x80\x67' + _tam_ebml(10 ** 6)
+            + b'\x16\x54\xAE\x6B' + _tam_ebml(1000) + b'\xAE' + _tam_ebml(500)
+            + b'\x86' + _tam_ebml(10) + b'S_T')
+
+
+def mkv_bloque_cero():
+    """Un bloque que empieza por 0x00 (p. ej. trozo sin descargar): antes, bucle infinito."""
+    cluster = _el(0x1F43B675, _el(0xE7, b'\x00') + _el(0xA3, b'\x00' * 5))
+    return _cabecera_ebml() + _el(0x18538067, cluster)
+
+
+def _caja(tipo, datos):
+    return struct.pack('>I4s', 8 + len(datos), tipo) + datos
+
+
+def mp4(tam_fijo=0, n_muestras=1):
+    muestra = struct.pack('>H', len(TEXTO.encode())) + TEXTO.encode()
+    mdat = _caja(b'mdat', muestra)
+    lang = sum((ord(c) - 0x60) << s for c, s in zip('spa', (10, 5, 0)))
+    tkhd = _caja(b'tkhd', b'\0' * 12 + struct.pack('>I', 1) + b'\0' * 68)
+    mdhd = _caja(b'mdhd', b'\0' * 12 + struct.pack('>II', 1000, 2000) + struct.pack('>H', lang) + b'\0' * 2)
+    hdlr = _caja(b'hdlr', b'\0' * 8 + b'sbtl' + b'\0' * 13)
+    stsd = _caja(b'stsd', b'\0' * 4 + struct.pack('>I', 1) + struct.pack('>I4s', 16, b'tx3g') + b'\0' * 8)
+    stts = _caja(b'stts', b'\0' * 4 + struct.pack('>III', 1, 1, 2000))
+    stsc = _caja(b'stsc', b'\0' * 4 + struct.pack('>IIII', 1, 1, 1, 1))
+    if tam_fijo:
+        stsz = _caja(b'stsz', b'\0' * 4 + struct.pack('>II', tam_fijo, n_muestras))
+    else:
+        stsz = _caja(b'stsz', b'\0' * 4 + struct.pack('>III', 0, 1, len(muestra)))
+    stco = _caja(b'stco', b'\0' * 4 + struct.pack('>II', 1, 8))     # la muestra va tras la cabecera de mdat
+    stbl = _caja(b'stbl', stsd + stts + stsc + stsz + stco)
+    trak = _caja(b'trak', tkhd + _caja(b'mdia', mdhd + hdlr + _caja(b'minf', stbl)))
+    mvhd = _caja(b'mvhd', b'\0' * 12 + struct.pack('>I', 1000) + b'\0' * 84)
+    return mdat + _caja(b'moov', mvhd + trak)
+
+
+def mp4_moov_enorme():
+    """El índice declara 256 MB: antes se intentaba leer entero en memoria."""
+    return struct.pack('>I4s', 256 * 1024 * 1024, b'moov') + b'\0' * 64
+
+
+# ---------- Ayudas ----------
+
+def sin_colgarse(prueba, funcion, *args):
+    """Ejecuta la función en un hilo y falla si no termina a tiempo. Devuelve (resultado, error)."""
+    salida = {}
+
+    def ejecutar():
+        try:
+            salida['resultado'] = funcion(*args)
+        except Exception as e:  # noqa: BLE001 - la prueba decide qué error esperaba
+            salida['error'] = e
+
+    hilo = threading.Thread(target=ejecutar, daemon=True)
+    hilo.start()
+    hilo.join(LIMITE_SEGUNDOS)
+    prueba.assertFalse(hilo.is_alive(), f'{funcion.__name__} no terminó en {LIMITE_SEGUNDOS} s')
+    return salida.get('resultado'), salida.get('error')
+
+
+class ConArchivos(unittest.TestCase):
+    def setUp(self):
+        self._dir = tempfile.TemporaryDirectory()
+        self.dir = Path(self._dir.name)
+
+    def tearDown(self):
+        self._dir.cleanup()
+
+    def archivo(self, nombre, datos):
+        ruta = self.dir / nombre
+        ruta.write_bytes(datos)
+        return ruta
+
+
+# ---------- Pruebas ----------
+
+class VideosValidos(ConArchivos):
+    def test_mkv_valido_sigue_funcionando(self):
+        ruta = self.archivo('valido.mkv', mkv_valido())
+        pistas = b.pistas_texto(ruta)
+        self.assertEqual([(p['num'], p['lang'], p['name']) for p in pistas], [(1, 'spa', 'Español (España)')])
+        srt = b.extraer_srt(ruta, [1])[1]
+        self.assertIn('00:00:00,000 --> 00:00:02,000', srt)
+        self.assertIn(TEXTO, srt)
+        res, error = sin_colgarse(self, b.incrustado, ruta)
+        self.assertIsNone(error)
+        self.assertIsNotNone(res['castellano'])
+
+    def test_mp4_valido_sigue_funcionando(self):
+        ruta = self.archivo('valido.mp4', mp4())
+        pistas = b.pistas_texto(ruta)
+        self.assertEqual([(p['num'], p['lang'], p['codec']) for p in pistas], [(1, 'spa', 'tx3g')])
+        srt = b.extraer_srt(ruta, [1])[1]
+        self.assertIn('00:00:00,000 --> 00:00:02,000', srt)
+        self.assertIn(TEXTO, srt)
+
+
+class VideosManipulados(ConArchivos):
+    def test_mkv_cortado_no_se_cuelga(self):
+        ruta = self.archivo('cortado.mkv', mkv_cortado())
+        _, error = sin_colgarse(self, b.pistas_mkv, ruta)
+        self.assertIsInstance(error, b.ArchivoInvalido)
+
+    def test_mkv_bloque_cero_no_se_cuelga(self):
+        ruta = self.archivo('cero.mkv', mkv_bloque_cero())
+        _, error = sin_colgarse(self, b.extraer_srt_mkv, ruta, [1])
+        self.assertIsInstance(error, b.ArchivoInvalido)
+
+    def test_vint_b_byte_cero(self):
+        _, error = sin_colgarse(self, b._vint_b, b'\x00' * 9, 0)
+        self.assertIsInstance(error, b.ArchivoInvalido)
+
+    def test_mp4_con_miles_de_millones_de_muestras(self):
+        ruta = self.archivo('muestras.mp4', mp4(tam_fijo=4, n_muestras=0xFFFFFFFF))
+        _, error = sin_colgarse(self, b.pistas_mp4, ruta)
+        self.assertIsInstance(error, b.ArchivoInvalido)
+
+    def test_mp4_moov_enorme(self):
+        ruta = self.archivo('moov.mp4', mp4_moov_enorme())
+        _, error = sin_colgarse(self, b.pistas_mp4, ruta)
+        self.assertIsInstance(error, b.ArchivoInvalido)
+
+    def test_incrustado_devuelve_vacio_sin_error(self):
+        for nombre, datos in (('a.mkv', mkv_cortado()), ('b.mkv', mkv_bloque_cero()),
+                              ('c.mp4', mp4(tam_fijo=4, n_muestras=0xFFFFFFFF)), ('d.mp4', mp4_moov_enorme())):
+            with self.subTest(nombre):
+                res, error = sin_colgarse(self, b.incrustado, self.archivo(nombre, datos))
+                self.assertIsNone(error)
+                self.assertEqual(res, {'castellano': None, 'latino': None, 'ingles': None})
+
+
+class TextosDeTerceros(ConArchivos):
+    def test_limpiar_texto_quita_controles_y_conserva_saltos(self):
+        sucio = 'Hola\x1b[31m‮mundo\x00\x9b​.\r\nAdiós\t!'
+        self.assertEqual(b.limpiar_texto(sucio), 'Hola[31mmundo.\r\nAdiós\t!')
+
+    def test_visible_es_una_sola_linea(self):
+        self.assertEqual(b.visible('pista\nCASTELLANO falso\x1b'), 'pista CASTELLANO falso ')
+
+    def test_guardar_limpia_el_texto(self):
+        destino = self.dir / 'video.srt'
+        b.guardar('1\r\n00:00:01,000 --> 00:00:02,000\r\nHola\x1b]0;titulo\x07\r\n', destino)
+        self.assertEqual(destino.read_bytes().decode('utf-8'),
+                         '1\r\n00:00:01,000 --> 00:00:02,000\r\nHola]0;titulo\r\n')
+
+
+if __name__ == '__main__':
+    unittest.main(verbosity=2)

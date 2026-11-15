@@ -50,6 +50,15 @@ PROVIDERS = ['opensubtitles', 'addic7ed', 'gestdown', 'subtitulamos']
 MAX_VIDEOS = 40     # vídeos que buscan en internet por ejecución (--max-videos; 0 = sin límite)
 MAX_DESCARGAS = 5   # candidatos que se descargan por vídeo (--max-descargas; 0 = sin límite)
 PAUSA = 3           # segundos de espera entre un vídeo que busca en internet y el siguiente
+# Límites de seguridad frente a vídeos o subtítulos corruptos o manipulados.
+MAX_SRT = 2 * 1024 * 1024        # caracteres de un subtítulo (los normales tienen 20-200 mil)
+MAX_ELEMENTO = 16 * 1024 * 1024  # bytes que se leen de golpe de un elemento MKV o muestra MP4
+MAX_MOOV = 64 * 1024 * 1024      # tamaño máximo del índice ('moov') de un MP4
+MAX_MUESTRAS = 1_000_000         # entradas de una tabla de muestras de una pista de subtítulos
+# Caracteres de control (C0 y C1), de ancho cero y de dirección del texto: no aparecen en un
+# subtítulo normal y pueden servir para engañar a reproductores, terminales o al agente.
+CONTROL = re.compile(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f​-‏‪-‮⁦-⁩]')
+CONTROL_LINEA = re.compile(r'[\x00-\x1f\x7f-\x9f​-‏‪-‮⁦-⁩]')
 
 ES_RE = re.compile(
     r'\b(vosotr[oa]s|vuestr[oa]s?|os|vale(?!\s+la\s+pena)|chaval\w*|leches|ordenador\w*|móvil\w*'
@@ -71,6 +80,20 @@ ESPANA_NOMBRE = re.compile(r'\b(es|esp|españa|spain|castellano|castilian|europe
 
 RANGO = {None: 0, 'otro': 0, 'ingles': 1, 'latino': 2, 'castellano': 3}
 ETIQUETA = {'castellano': 'CASTELLANO', 'latino': 'LATINO', 'ingles': 'INGLÉS'}
+
+
+class ArchivoInvalido(Exception):
+    """Vídeo corrupto, cortado o manipulado: se dejan de leer sus pistas incrustadas."""
+
+
+def limpiar_texto(texto):
+    """Quita del subtítulo los caracteres de control, de ancho cero y de dirección del texto."""
+    return CONTROL.sub('', texto)
+
+
+def visible(valor):
+    """Texto de terceros (nombres de pista, ids...) seguro para mostrarlo en una sola línea."""
+    return CONTROL_LINEA.sub(' ', str(valor))
 
 
 # Coincidencias de la puntuación de subliminal que indican que el subtítulo va sincronizado:
@@ -191,8 +214,10 @@ def _vint(f):
 
 def _vint_b(d, p):
     b = d[p]; l = 1; m = 0x80
-    while not b & m:
+    while l <= 8 and not b & m:
         m >>= 1; l += 1
+    if l > 8:                    # byte 0x00: sin este tope el bucle no terminaba nunca
+        raise ArchivoInvalido('número de pista no válido en un bloque MKV')
     v = b & (m - 1)
     for x in d[p + 1:p + l]:
         v = (v << 8) | x
@@ -210,6 +235,20 @@ def _eid(f):
     for x in f.read(l - 1):
         v = (v << 8) | x
     return v
+
+
+def _leer(f, n, maximo=MAX_ELEMENTO):
+    """Lee exactamente n bytes; error si falta el tamaño, es anormal o el archivo se acaba antes.
+
+    Sin esta comprobación, un MKV cortado o manipulado dejaba los bucles de lectura leyendo
+    datos vacíos al final del archivo para siempre.
+    """
+    if n is None or n > maximo:
+        raise ArchivoInvalido('tamaño de elemento no válido')
+    d = f.read(n)
+    if len(d) < n:
+        raise ArchivoInvalido('el archivo se acaba antes de tiempo')
+    return d
 
 
 def pistas_mkv(path):
@@ -230,10 +269,13 @@ def pistas_mkv(path):
                 f.seek(s, 1); continue
             fin = f.tell() + s
             while f.tell() < fin:
-                _eid(f); s2 = _vint(f); fin_t = f.tell() + s2
+                _eid(f); s2 = _vint(f)
+                if s2 is None:
+                    raise ArchivoInvalido('pista sin tamaño')
+                fin_t = f.tell() + s2
                 t = {'lang': 'eng', 'ietf': '', 'name': '', 'forced': 0, 'codec': ''}
                 while f.tell() < fin_t:
-                    j = _eid(f); d = f.read(_vint(f))
+                    j = _eid(f); d = _leer(f, _vint(f))
                     if j == 0xD7: t['num'] = int.from_bytes(d, 'big')
                     elif j == 0x86: t['codec'] = d.decode('ascii', 'replace')
                     elif j == 0x22B59C: t['lang'] = d.decode('ascii', 'replace')
@@ -274,25 +316,27 @@ def extraer_srt_mkv(path, nums):
             if i == 0x1549A966:          # Info: TimecodeScale
                 fin = f.tell() + s
                 while f.tell() < fin:
-                    j = _eid(f); d = f.read(_vint(f))
+                    j = _eid(f); d = _leer(f, _vint(f))
                     if j == 0x2AD7B1:
                         escala = int.from_bytes(d, 'big')
             elif i == 0xE7:              # Timecode del cluster
-                ctc = int.from_bytes(f.read(s), 'big')
+                ctc = int.from_bytes(_leer(f, s), 'big')
             elif i == 0xA3:              # SimpleBlock
                 tn, _ = _vint_b(f.read(1) + b'\0' * 8, 0); f.seek(-1, 1)
                 if tn in nums:
-                    bloque(f.read(s), None)
+                    bloque(_leer(f, s), None)
                 else:
                     f.seek(s, 1)
             elif i == 0xA0:              # BlockGroup
                 fin = f.tell() + s; blk = None; dur = None
                 while f.tell() < fin:
                     j = _eid(f); s2 = _vint(f)
+                    if s2 is None:
+                        raise ArchivoInvalido('bloque sin tamaño')
                     if j == 0xA1:
-                        blk = f.read(s2)
+                        blk = _leer(f, s2)
                     elif j == 0x9B:
-                        dur = int.from_bytes(f.read(s2), 'big')
+                        dur = int.from_bytes(_leer(f, s2), 'big')
                     else:
                         f.seek(s2, 1)
                 if blk:
@@ -333,6 +377,8 @@ def _leer_moov(f):
         if tam < h:
             break
         if tipo == b'moov':
+            if tam - h > MAX_MOOV:
+                raise ArchivoInvalido('índice MP4 (moov) demasiado grande')
             f.seek(pos + h)
             return f.read(tam - h)
         pos += tam
@@ -341,7 +387,8 @@ def _leer_moov(f):
 
 def _trak_mp4(m, ini, fin):
     t = {'num': 0, 'codec': '', 'lang': '', 'ietf': '', 'name': '', 'forced': 0, 'handler': '',
-         'escala': 1000, 'stts': [], 'stsc': [], 'stsz': [], 'co': [], 'elst': [], 'chap': []}
+         'escala': 1000, 'stts': [], 'stsc': [], 'stsz': [], 'co': [], 'elst': [], 'chap': [],
+         'cajas': {}}
 
     def rec(i, f_):
         for tipo, a, b in _cajas(m, i, f_):
@@ -367,28 +414,44 @@ def _trak_mp4(m, ini, fin):
                 t['name'] = m[a:b].split(b'\0')[0].decode('utf-8', 'replace').strip()
             elif tipo == 'stsd':
                 t['codec'] = m[a + 12:a + 16].decode('latin-1')
-            elif tipo == 'stts':
-                n = struct.unpack_from('>I', m, a + 4)[0]
-                t['stts'] = [struct.unpack_from('>II', m, a + 8 + 8 * k) for k in range(n)]
-            elif tipo == 'stsc':
-                n = struct.unpack_from('>I', m, a + 4)[0]
-                t['stsc'] = [struct.unpack_from('>III', m, a + 8 + 12 * k) for k in range(n)]
-            elif tipo == 'stsz':
-                tam, n = struct.unpack_from('>II', m, a + 4)
-                t['stsz'] = [tam] * n if tam else list(struct.unpack_from(f'>{n}I', m, a + 12))
-            elif tipo == 'stco':
-                n = struct.unpack_from('>I', m, a + 4)[0]
-                t['co'] = list(struct.unpack_from(f'>{n}I', m, a + 8))
-            elif tipo == 'co64':
-                n = struct.unpack_from('>I', m, a + 4)[0]
-                t['co'] = list(struct.unpack_from(f'>{n}Q', m, a + 8))
-            elif tipo == 'elst':
-                n = struct.unpack_from('>I', m, a + 4)[0]
-                fmt, paso = ('>Qq', 20) if v == 1 else ('>Ii', 12)
-                t['elst'] = [struct.unpack_from(fmt, m, a + 8 + paso * k) for k in range(n)]
+            elif tipo in ('stts', 'stsc', 'stsz', 'stco', 'co64', 'elst'):
+                t['cajas'][tipo] = (a, v)   # se leen después, y solo en pistas de subtítulos
 
     rec(ini, fin)
     return t
+
+
+def _tablas_mp4(m, t):
+    """Lee las tablas de muestras de una pista de subtítulos, con límites de tamaño.
+
+    Antes se leían las de todas las pistas sin límite: un MP4 manipulado (o un vídeo con
+    audio PCM) podía declarar miles de millones de muestras y agotar la memoria.
+    """
+    def entradas(a, desp=4):
+        n = struct.unpack_from('>I', m, a + desp)[0]
+        if n > MAX_MUESTRAS:
+            raise ArchivoInvalido('tabla de muestras MP4 demasiado grande')
+        return n
+
+    cajas = t.pop('cajas')
+    if 'stts' in cajas:
+        a, _ = cajas['stts']
+        t['stts'] = [struct.unpack_from('>II', m, a + 8 + 8 * k) for k in range(entradas(a))]
+    if 'stsc' in cajas:
+        a, _ = cajas['stsc']
+        t['stsc'] = [struct.unpack_from('>III', m, a + 8 + 12 * k) for k in range(entradas(a))]
+    if 'stsz' in cajas:
+        a, _ = cajas['stsz']
+        tam, n = struct.unpack_from('>I', m, a + 4)[0], entradas(a, 8)
+        t['stsz'] = [tam] * n if tam else list(struct.unpack_from(f'>{n}I', m, a + 12))
+    for tipo, fmt in (('stco', 'I'), ('co64', 'Q')):
+        if tipo in cajas:
+            a, _ = cajas[tipo]
+            t['co'] = list(struct.unpack_from(f'>{entradas(a)}{fmt}', m, a + 8))
+    if 'elst' in cajas:
+        a, v = cajas['elst']
+        fmt, paso = ('>Qq', 20) if v == 1 else ('>Ii', 12)
+        t['elst'] = [struct.unpack_from(fmt, m, a + 8 + paso * k) for k in range(entradas(a))]
 
 
 def pistas_mp4(path):
@@ -408,6 +471,7 @@ def pistas_mp4(path):
     pistas = []
     for t in traks:
         if t['codec'] in ('tx3g', 'wvtt') and t['num'] not in capitulos:
+            _tablas_mp4(moov, t)
             t['escala_mov'] = escala_mov
             t['lang'] = t['lang'] or 'und'
             pistas.append(t)
@@ -443,7 +507,13 @@ def _muestras_mp4(f, p):
                 break
             offs.append(base)
             base += tams[len(offs) - 1]
-    durs = [d for n, d in p['stts'] for _ in range(n)]
+    # Una entrada de 'stts' puede declarar miles de millones de muestras: solo hacen falta tantas
+    # duraciones como muestras tiene la pista.
+    durs = []
+    for n, d in p['stts']:
+        durs.extend([d] * min(n, len(tams) - len(durs)))
+        if len(durs) >= len(tams):
+            break
     # Lista de edición: un hueco inicial retrasa la pista; un media_time > 0 la adelanta.
     desfase = 0.0
     for dur_seg, t_media in p['elst']:
@@ -455,6 +525,8 @@ def _muestras_mp4(f, p):
     lineas, t = [], 0
     for i, (o, tam) in enumerate(zip(offs, tams)):
         d = durs[i] if i < len(durs) else 0
+        if tam > MAX_ELEMENTO:
+            raise ArchivoInvalido('muestra de subtítulo MP4 demasiado grande')
         if tam > 2:
             f.seek(o)
             texto = _texto_muestra(f.read(tam), p['codec'])
@@ -519,7 +591,7 @@ def incrustado(path, con_ingles=False):
     try:
         pistas = [p for p in pistas_texto(path) if not _forzada(p)]
     except Exception as e:
-        print(f'  (no se pudieron leer las pistas incrustadas: {e})')
+        print(f'  (no se pudieron leer las pistas incrustadas: {visible(e)})')
         return res
     if not pistas:
         return res
@@ -532,17 +604,17 @@ def incrustado(path, con_ingles=False):
     try:
         textos = extraer_srt(path, nums)
     except Exception as e:
-        print(f'  (no se pudieron extraer las pistas incrustadas: {e})')
+        print(f'  (no se pudieron extraer las pistas incrustadas: {visible(e)})')
         return res
     cast, lat = [], []
     for p in esp:
         texto = textos.get(p['num'])
-        if not texto:
+        if not texto or len(texto) > MAX_SRT:
             continue
         es, la, ok = dialecto(texto)
-        print(f'  pista incrustada {p["num"]} [{p["ietf"] or p["lang"]}] {p["name"]}: '
+        print(f'  pista incrustada {p["num"]} [{visible(p["ietf"] or p["lang"])}] {visible(p["name"])}: '
               f'españa={es} latino={la}', flush=True)
-        desc = f'pista {p["num"]} {p["name"]}'.strip()
+        desc = visible(f'pista {p["num"]} {p["name"]}'.strip())
         # En las pistas oficiales la etiqueta latina es fiable, y el detector de dialecto no
         # basta (una pista "LA" de Disney+ dio españa=26 latino=11 y pasaba por castellano).
         if ok and not _etiqueta_latina(p):
@@ -553,8 +625,8 @@ def incrustado(path, con_ingles=False):
         res['castellano'] = max(cast, key=lambda c: c[0])[1:]
     if lat:
         res['latino'] = max(lat, key=lambda c: c[0])[1:]
-    if eng and con_ingles and textos.get(eng[0]['num']):
-        res['ingles'] = (textos[eng[0]['num']], f'pista {eng[0]["num"]} {eng[0]["name"]}'.strip())
+    if eng and con_ingles and textos.get(eng[0]['num']) and len(textos[eng[0]['num']]) <= MAX_SRT:
+        res['ingles'] = (textos[eng[0]['num']], visible(f'pista {eng[0]["num"]} {eng[0]["name"]}'.strip()))
     return res
 
 
@@ -568,7 +640,9 @@ def ingles_incrustado(path):
         texto = extraer_srt(path, [pistas[0]['num']]).get(pistas[0]['num'])
     except Exception:
         return None, ''
-    return (texto or None), f'pista {pistas[0]["num"]} {pistas[0]["name"]}'.strip()
+    if not texto or len(texto) > MAX_SRT:
+        return None, ''
+    return texto, visible(f'pista {pistas[0]["num"]} {pistas[0]["name"]}'.strip())
 
 
 def ingles_proveedores(pool, video, max_descargas=MAX_DESCARGAS):
@@ -579,9 +653,13 @@ def ingles_proveedores(pool, video, max_descargas=MAX_DESCARGAS):
         if not pool.download_subtitle(sub) or not sub.content:
             continue
         texto = sub.text
+        if len(texto) > MAX_SRT:
+            print(f'  [inglés] {sub.provider_name:13} id={visible(sub.id)} descartado: tamaño anormal',
+                  flush=True)
+            continue
         ep_ok = episodio_correcto(sub, video)
         dur_ok = duracion_ok(texto, video)
-        print(f'  [inglés] {sub.provider_name:13} id={sub.id} score={compute_score(sub, video)} '
+        print(f'  [inglés] {sub.provider_name:13} id={visible(sub.id)} score={compute_score(sub, video)} '
               f'episodio_ok={ep_ok} duración_ok={dur_ok}', flush=True)
         if ep_ok and dur_ok:
             return texto, sub
@@ -593,7 +671,8 @@ def guardar(texto, destino):
         bk = HOME / 'backup' / f'{datetime.now():%Y%m%d-%H%M%S}_{destino.name}'
         bk.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(destino, bk)
-    destino.write_text(texto, encoding='utf-8', newline='')
+    # El texto viene de terceros: se guarda sin caracteres de control ni de dirección del texto.
+    destino.write_text(limpiar_texto(texto), encoding='utf-8', newline='')
 
 
 class SinRuido(logging.Filter):
@@ -733,6 +812,10 @@ def main():
                 if not pool.download_subtitle(sub) or not sub.content:
                     continue
                 texto = sub.text
+                if len(texto) > MAX_SRT:
+                    print(f'  {sub.provider_name:13} id={visible(sub.id)} descartado: tamaño anormal',
+                          flush=True)
+                    continue
                 if texto in vistos:
                     continue
                 vistos.add(texto)
@@ -741,7 +824,7 @@ def main():
                 dur_ok = duracion_ok(texto, video)
                 score = compute_score(sub, video)
                 sinc = sincronia(sub, video)
-                print(f'  {sub.provider_name:13} id={sub.id} score={score} sincronía={sinc} '
+                print(f'  {sub.provider_name:13} id={visible(sub.id)} score={score} sincronía={sinc} '
                       f'españa={es} latino={la} episodio_ok={ep_ok} duración_ok={dur_ok}', flush=True)
                 if not (ep_ok and dur_ok):
                     continue
@@ -779,7 +862,7 @@ def main():
 
     print('\n==== RESUMEN ====')
     for nombre, estado, fuente in resumen:
-        print(f'{estado:28} {fuente:30} {nombre}')
+        print(f'{visible(estado):28} {visible(fuente):30} {visible(nombre)}')
 
 
 if __name__ == '__main__':

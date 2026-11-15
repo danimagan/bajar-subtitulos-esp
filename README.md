@@ -184,6 +184,8 @@ python -I bajar_subs.py <carpeta_o_video> [opciones]
 | `SKILL.md`       | Instrucciones de la skill para el agente y lecciones aprendidas      |
 | `bajar_subs.py`  | Script: lectura de pistas MKV/MP4, búsqueda, validación y guardado   |
 | `requirements.txt` | Dependencias de Python                                             |
+| `tests/test_seguridad.py` | Pruebas de seguridad con vídeos y textos manipulados        |
+| `SECURITY.md`    | Política de seguridad y cómo avisar de un problema                   |
 | `LICENSE`        | Licencia MIT                                                         |
 
 ## Uso responsable
@@ -196,6 +198,45 @@ lances búsquedas masivas que sobrecarguen los servicios: los límites por defec
 por ejecución, 5 descargas por vídeo y una pausa entre vídeos) están para eso; si una
 carpeta tiene más, deja que lo pendiente se procese en otra ejecución en lugar de quitar el
 límite.
+
+## Seguridad
+
+La skill trata todo lo que llega de fuera como datos no fiables: los subtítulos descargados,
+las pistas incrustadas en los vídeos, los nombres de pistas y de releases y las respuestas de
+los proveedores.
+
+- **Sin inyecciones**: no usa bases de datos, no ejecuta comandos del sistema ni `eval`, y no
+  deserializa datos (`pickle`). El texto de un subtítulo solo se analiza con expresiones
+  regulares y se guarda como texto, así que no puede colar SQL, comandos ni código.
+- **Rutas seguras**: el `.srt` siempre toma el nombre de tu vídeo. Ningún dato de los
+  proveedores interviene en las rutas, así que un subtítulo no puede escribir fuera de su sitio
+  ni sobrescribir otros archivos. Lo que se sustituye se copia antes a `~/.subtitulos-esp/backup`.
+- **Conexiones cifradas**: los proveedores se consultan por HTTPS con verificación de
+  certificados.
+- **Subtítulos limpios**: antes de guardarlos se quitan los caracteres de control, de ancho
+  cero y de dirección del texto, y se descartan los de tamaño anormal (más de 2 millones de
+  caracteres). Así se reduce el riesgo de subtítulos maliciosos preparados para atacar fallos
+  de los reproductores, como los que se publicaron en 2017 para VLC, Kodi o Popcorn Time.
+- **Lectura robusta de vídeos**: el lector de pistas MKV/MP4 tiene límites de tamaño y detecta
+  archivos cortados o manipulados. Si encuentra uno, deja de leer ese vídeo y sigue con la
+  búsqueda en internet, en lugar de colgarse o agotar la memoria.
+- **Protección del agente**: los nombres de pistas y los identificadores se muestran en una
+  sola línea y sin caracteres de control, y las instrucciones de la skill indican al agente
+  que trate el texto de terceros como datos, nunca como instrucciones (*prompt injection*).
+  Por descargar texto de terceros, la auditoría de Snyk en skills.sh marca la skill con riesgo
+  medio (W011); es inherente a lo que hace la skill.
+- **Credenciales**: la contraseña de OpenSubtitles se guarda en texto plano en
+  `~/.subtitulos-esp/credenciales.json`, fuera del repositorio (`.gitignore` la excluye). Usa
+  una contraseña exclusiva para esa cuenta.
+
+Para comprobarlo tú mismo, ejecuta las pruebas de seguridad con el Python del entorno virtual:
+
+```
+python -I tests/test_seguridad.py
+```
+
+¿Has encontrado un problema de seguridad? Avisa en privado como se explica en
+[SECURITY.md](SECURITY.md), no en una issue pública.
 
 ## Licencia
 
