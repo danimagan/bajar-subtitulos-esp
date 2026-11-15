@@ -1,5 +1,11 @@
 # bajar-subtitulos-esp
 
+> **English:** an agent skill for Claude Code, Codex and OpenCode that finds **Spain Spanish
+> (castellano) subtitles** for English-language movies and TV shows. It checks embedded MKV/MP4
+> tracks first, then searches subtitle providers and verifies the dialect by reading the text,
+> so Latin American Spanish mislabeled as "es" is not picked. Install with
+> `npx skills add danimagan/bajar-subtitulos-esp -g`. Documentation below is in Spanish.
+
 Skill para agentes de programación ([Claude Code](https://claude.com/claude-code),
 [Codex](https://developers.openai.com/codex) y [OpenCode](https://opencode.ai)) que consigue
 **subtítulos en castellano (español de España)** para películas y series en inglés, con un
@@ -81,6 +87,21 @@ INGLÉS (incrustado)          pista 3 English SDH            Serie.S01E04.1080p.
 Requisitos: Python 3.9+ y al menos uno de estos agentes: Claude Code, Codex u OpenCode.
 Funciona en Windows, Linux y macOS. No hay que editar ninguna ruta: todo se guarda en la
 carpeta personal de cada usuario (`~/.subtitulos-esp`).
+
+### Instalación rápida
+
+Con Node.js instalado, un solo comando la instala para tus agentes con
+[`skills`](https://skills.sh) (te pregunta en cuáles):
+
+```
+npx skills add danimagan/bajar-subtitulos-esp -g
+```
+
+Para elegir los agentes directamente: `-a claude-code -a codex -a opencode`. La primera vez
+que uses la skill, el agente crea el entorno de Python que necesita. Si quieres usar
+OpenSubtitles, sigue el paso 3 de la instalación manual.
+
+### Instalación manual
 
 1. Clona el repositorio en la carpeta de skills de tu agente. Cada uno busca las skills en
    un sitio distinto:
