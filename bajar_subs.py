@@ -20,6 +20,7 @@ Credenciales de opensubtitles.org en %USERPROFILE%\\.subtitulos-esp\\credenciale
 """
 import argparse
 import json
+import logging
 import re
 import shutil
 import struct
@@ -558,8 +559,28 @@ def guardar(texto, destino):
     destino.write_text(texto, encoding='utf-8', newline='')
 
 
+class SinRuido(logging.Filter):
+    """subliminal escribe trazas largas en stderr y el refinador omdb da 401 siempre.
+
+    Se descartan los fallos de refinado (no cambian el resultado) y del resto de avisos se
+    deja una sola línea, sin traza. Así la salida es limpia en cualquier shell y agente
+    sin tener que filtrarla con grep / Where-Object.
+    """
+
+    def filter(self, record):
+        if 'Failed to refine' in record.getMessage():
+            return False
+        record.exc_info = record.exc_text = None
+        return True
+
+
 def main():
     sys.stdout.reconfigure(encoding='utf-8')
+    sys.stderr.reconfigure(encoding='utf-8')
+    aviso = logging.StreamHandler()
+    aviso.setFormatter(logging.Formatter('  aviso (%(name)s): %(message)s'))
+    aviso.addFilter(SinRuido())
+    logging.basicConfig(level=logging.WARNING, handlers=[aviso])
     ap = argparse.ArgumentParser()
     ap.add_argument('ruta', type=Path)
     ap.add_argument('--force', action='store_true',

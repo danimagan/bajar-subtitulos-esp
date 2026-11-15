@@ -18,40 +18,54 @@ Argumento: la ruta de una carpeta (se busca recursivamente) o de un vídeo. Si n
 
 ## Entorno
 
-Todas las rutas son relativas a la carpeta personal del usuario (`~`; en Windows,
-`%USERPROFILE%`), así que funcionan en cualquier equipo sin tocar nada.
+Esta skill sigue el formato estándar de Agent Skills y funciona igual en Claude Code, Codex
+y OpenCode. Todas las rutas son relativas a la carpeta personal del usuario (`~`; en
+Windows, `%USERPROFILE%`), así que funcionan en cualquier equipo sin tocar nada.
 
-- Script: `bajar_subs.py`, en la carpeta base de esta skill (la ruta que aparece como
-  "Base directory for this skill" al cargarla). Abajo se escribe `<skill>`.
+- Script: `bajar_subs.py`, en la misma carpeta que este `SKILL.md`. Abajo se escribe
+  `<skill>`. Cada agente indica esa ruta al cargar la skill: Claude Code la da como
+  "Base directory for this skill", OpenCode como directorio base de la skill y Codex con
+  la ruta del `SKILL.md` en la lista de skills (quítale `/SKILL.md`).
 - Venv permanente: `~/.subtitulos-esp/venv` (con `subliminal` 2.8). Si no existe, créalo:
-  - Windows: `python -m venv "$HOME\.subtitulos-esp\venv"` y
+  - Windows (PowerShell):
+    `python -m venv "$HOME\.subtitulos-esp\venv"` y
     `& "$HOME\.subtitulos-esp\venv\Scripts\pip.exe" install -r "<skill>\requirements.txt"`
-  - Linux/macOS: `python3 -m venv ~/.subtitulos-esp/venv` y
+  - Windows (bash, p. ej. Git Bash):
+    `python -m venv ~/.subtitulos-esp/venv` y
+    `~/.subtitulos-esp/venv/Scripts/pip.exe install -r "<skill>/requirements.txt"`
+  - Linux/macOS:
+    `python3 -m venv ~/.subtitulos-esp/venv` y
     `~/.subtitulos-esp/venv/bin/pip install -r "<skill>/requirements.txt"`
 - Credenciales opensubtitles.org (opcional, pero da más resultados):
   `~/.subtitulos-esp/credenciales.json` con
   `{"opensubtitles": {"username": "<usuario>", "password": "<contraseña>"}}`.
-  Claude no debe escribir la contraseña: si falta el archivo, el script funciona sin
+  El agente no debe escribir la contraseña: si falta el archivo, el script funciona sin
   OpenSubtitles; díselo al usuario y que lo cree él.
 - Copias de los `.srt` que se sustituyen: `~/.subtitulos-esp/backup`.
 
 ## Pasos
 
-1. Ejecuta el script con el Python del venv, filtrando el ruido del refinador omdb (da 401
-   siempre):
+1. Ejecuta el script con el Python del venv (el propio script ya oculta el ruido de
+   subliminal, como el 401 del refinador omdb, así que no hace falta filtrar la salida):
    - Windows (PowerShell):
      ```
-     & "$HOME\.subtitulos-esp\venv\Scripts\python.exe" -I "<skill>\bajar_subs.py" "<ruta>" 2>&1 | Where-Object { $_ -notmatch 'omdb|Traceback|^\s+File |raise |HTTPError|^\s+\^|^\s+results' }
+     & "$HOME\.subtitulos-esp\venv\Scripts\python.exe" -I "<skill>\bajar_subs.py" "<ruta>"
+     ```
+   - Windows (bash):
+     ```
+     ~/.subtitulos-esp/venv/Scripts/python.exe -I "<skill>/bajar_subs.py" "<ruta>"
      ```
    - Linux/macOS:
      ```
-     ~/.subtitulos-esp/venv/bin/python -I "<skill>/bajar_subs.py" "<ruta>" 2>&1 | grep -vE 'omdb|Traceback|^\s+File |raise |HTTPError|^\s+\^|^\s+results'
+     ~/.subtitulos-esp/venv/bin/python -I "<skill>/bajar_subs.py" "<ruta>"
      ```
    Opciones: `--dry-run` (no escribe), `--force` (rehace aunque ya haya castellano),
    `--solo-castellano` (no guarda latino aunque no haya castellano), `--sin-ingles` (no baja
    inglés cuando no hay nada en español), `--ingles` (además extrae la pista inglesa incrustada,
-   prefiriendo SDH, como `.en.srt` adicional). Para carpetas grandes usa timeout de 10 min o
-   background.
+   prefiriendo SDH, como `.en.srt` adicional). Las carpetas grandes pueden tardar varios
+   minutos: usa un timeout de 10 min o ejecútalo en segundo plano si tu entorno lo permite.
+   Si el sandbox del agente bloquea la red, pide permiso para ejecutarlo con acceso a
+   internet (los proveedores de subtítulos lo necesitan).
 2. **Primero mira dentro del vídeo**: en `.mkv` y en `.mp4`/`.m4v`/`.mov` el script lee las
    pistas de subtítulos de texto sin ffmpeg ni mkvtoolnix (MKV: parser EBML propio que salta
    vídeo/audio, ~3 s para 3 GB; MP4: lee solo la caja `moov` y salta a las muestras de

@@ -1,10 +1,14 @@
 # bajar-subtitulos-esp
 
-Skill para [Claude Code](https://claude.com/claude-code) que consigue **subtítulos en castellano
-(español de España)** para películas y series en inglés, con un script de Python que hace todo
-el trabajo de forma autónoma.
+Skill para agentes de programación ([Claude Code](https://claude.com/claude-code),
+[Codex](https://developers.openai.com/codex) y [OpenCode](https://opencode.ai)) que consigue
+**subtítulos en castellano (español de España)** para películas y series en inglés, con un
+script de Python que hace todo el trabajo de forma autónoma.
 
-Basta con pedirle a Claude *"baja subtítulos"* en una carpeta: busca todos los vídeos,
+Sigue el formato estándar de *Agent Skills* (`SKILL.md` con `name` y `description`), así que
+el mismo repositorio sirve para los tres agentes sin cambiar nada.
+
+Basta con pedirle al agente *"baja subtítulos"* en una carpeta: busca todos los vídeos,
 mira primero si el propio archivo trae subtítulos en castellano, si no los busca en internet,
 **comprueba leyendo el texto** que son castellano de España (y no latino mal etiquetado) y deja
 un `.srt` junto a cada vídeo con su mismo nombre, listo para que el reproductor lo cargue solo.
@@ -68,13 +72,34 @@ INGLÉS (incrustado)          pista 3 English SDH            Serie.S01E04.1080p.
 
 ## Instalación
 
-Requisitos: Python 3.9+ y Claude Code. Funciona en Windows, Linux y macOS. No hay que editar
-ninguna ruta: todo se guarda en la carpeta personal de cada usuario (`~/.subtitulos-esp`).
+Requisitos: Python 3.9+ y al menos uno de estos agentes: Claude Code, Codex u OpenCode.
+Funciona en Windows, Linux y macOS. No hay que editar ninguna ruta: todo se guarda en la
+carpeta personal de cada usuario (`~/.subtitulos-esp`).
 
-1. Clona el repositorio dentro de la carpeta de skills de Claude Code:
-   ```
-   git clone https://github.com/danimagan/bajar-subtitulos-esp ~/.claude/skills/bajar-subtitulos-esp
-   ```
+1. Clona el repositorio en la carpeta de skills de tu agente. Cada uno busca las skills en
+   un sitio distinto:
+
+   | Agente      | Carpeta de skills del usuario                                        |
+   |-------------|----------------------------------------------------------------------|
+   | Claude Code | `~/.claude/skills/`                                                  |
+   | Codex       | `~/.agents/skills/`                                                  |
+   | OpenCode    | `~/.config/opencode/skills/` (y también lee `~/.claude/skills/` y `~/.agents/skills/`) |
+
+   Para tenerla en los tres con una sola copia, clónala en `~/.claude/skills` (Claude Code y
+   OpenCode la leen ahí) y enlázala desde `~/.agents/skills` para Codex:
+   - Linux/macOS:
+     ```
+     git clone https://github.com/danimagan/bajar-subtitulos-esp ~/.claude/skills/bajar-subtitulos-esp
+     mkdir -p ~/.agents/skills
+     ln -s ~/.claude/skills/bajar-subtitulos-esp ~/.agents/skills/bajar-subtitulos-esp
+     ```
+   - Windows (PowerShell; la unión de directorios no necesita permisos de administrador):
+     ```
+     git clone https://github.com/danimagan/bajar-subtitulos-esp "$HOME\.claude\skills\bajar-subtitulos-esp"
+     New-Item -ItemType Directory -Force "$HOME\.agents\skills" | Out-Null
+     New-Item -ItemType Junction -Path "$HOME\.agents\skills\bajar-subtitulos-esp" -Target "$HOME\.claude\skills\bajar-subtitulos-esp"
+     ```
+   Si solo usas uno de los agentes, basta con clonarla en su carpeta.
 2. Crea el entorno virtual con subliminal:
    - Windows (PowerShell):
      ```
@@ -86,7 +111,7 @@ ninguna ruta: todo se guarda en la carpeta personal de cada usuario (`~/.subtitu
      python3 -m venv ~/.subtitulos-esp/venv
      ~/.subtitulos-esp/venv/bin/pip install -r ~/.claude/skills/bajar-subtitulos-esp/requirements.txt
      ```
-   (Si te lo saltas, Claude lo crea la primera vez que uses la skill.)
+   (Si te lo saltas, el agente lo crea la primera vez que uses la skill.)
 3. (Opcional) Cuenta de [opensubtitles.org](https://www.opensubtitles.org) para obtener más
    resultados. Crea tú mismo el archivo `~/.subtitulos-esp/credenciales.json` (queda fuera del
    repositorio y nunca se sube):
@@ -96,7 +121,18 @@ ninguna ruta: todo se guarda en la carpeta personal de cada usuario (`~/.subtitu
 
 ## Uso
 
-Desde Claude Code: *"baja subtítulos"* o `/bajar-subtitulos-esp <carpeta>`.
+Pídeselo al agente con tus palabras (*"baja subtítulos de esta carpeta"*) o invoca la skill
+por su nombre:
+
+| Agente      | Invocación explícita                     |
+|-------------|------------------------------------------|
+| Claude Code | `/bajar-subtitulos-esp <carpeta>`        |
+| Codex       | `$bajar-subtitulos-esp <carpeta>`        |
+| OpenCode    | *"usa la skill bajar-subtitulos-esp con <carpeta>"* |
+
+El script necesita acceso a internet para consultar los proveedores. Si tu agente ejecuta
+los comandos en un sandbox sin red (Codex, por ejemplo, según su configuración), tendrás que
+aprobar que lo ejecute con acceso a la red.
 
 O directamente:
 
@@ -116,6 +152,6 @@ python -I bajar_subs.py <carpeta_o_video> [opciones]
 
 | Archivo          | Contenido                                                            |
 |------------------|----------------------------------------------------------------------|
-| `SKILL.md`       | Instrucciones de la skill para Claude y lecciones aprendidas         |
+| `SKILL.md`       | Instrucciones de la skill para el agente y lecciones aprendidas      |
 | `bajar_subs.py`  | Script: lectura de pistas MKV/MP4, búsqueda, validación y guardado   |
 | `requirements.txt` | Dependencias de Python                                             |
