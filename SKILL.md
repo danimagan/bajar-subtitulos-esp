@@ -1,6 +1,7 @@
 ---
 name: bajar-subtitulos-esp
 description: Descarga subtítulos en castellano (español de España, no latino) para series o películas en inglés que el usuario tiene en una carpeta. Úsala cuando pida "bajar subtítulos", "subtítulos en castellano/español" para una carpeta o vídeo.
+license: MIT
 ---
 
 # Bajar subtítulos en castellano

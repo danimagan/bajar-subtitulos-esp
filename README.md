@@ -155,3 +155,17 @@ python -I bajar_subs.py <carpeta_o_video> [opciones]
 | `SKILL.md`       | Instrucciones de la skill para el agente y lecciones aprendidas      |
 | `bajar_subs.py`  | Script: lectura de pistas MKV/MP4, búsqueda, validación y guardado   |
 | `requirements.txt` | Dependencias de Python                                             |
+| `LICENSE`        | Licencia MIT                                                         |
+
+## Uso responsable
+
+Este proyecto no aloja ni distribuye subtítulos: solo los busca en proveedores públicos y
+los descarga para los vídeos que ya tienes. Cada proveedor tiene sus propias condiciones de
+uso; respétalas. OpenSubtitles solo se consulta con tu propia cuenta gratuita de
+[opensubtitles.org](https://www.opensubtitles.org) (sin ella, el script lo omite). No
+lances búsquedas masivas que sobrecarguen los servicios.
+
+## Licencia
+
+[MIT](LICENSE): puedes usar, copiar, modificar y redistribuir el código libremente,
+manteniendo el aviso de copyright. Se ofrece tal cual, sin garantías.
