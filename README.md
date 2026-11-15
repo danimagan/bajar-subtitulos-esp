@@ -4,7 +4,7 @@
 > (castellano) subtitles** for English-language movies and TV shows. It checks embedded MKV/MP4
 > tracks first, then searches subtitle providers and verifies the dialect by reading the text,
 > so Latin American Spanish mislabeled as "es" is not picked. Install with
-> `npx skills add danimagan/bajar-subtitulos-esp -g`. Documentation below is in Spanish.
+> `npx skills add subtitulos-castellano/bajar-subtitulos-esp -g`. Documentation below is in Spanish.
 
 Skill para agentes de programación ([Claude Code](https://claude.com/claude-code),
 [Codex](https://developers.openai.com/codex) y [OpenCode](https://opencode.ai)) que consigue
@@ -94,7 +94,7 @@ Con Node.js instalado, un solo comando la instala para tus agentes con
 [`skills`](https://skills.sh) (te pregunta en cuáles):
 
 ```
-npx skills add danimagan/bajar-subtitulos-esp -g
+npx skills add subtitulos-castellano/bajar-subtitulos-esp -g
 ```
 
 Para elegir los agentes directamente: `-a claude-code -a codex -a opencode`. La primera vez
@@ -116,13 +116,13 @@ OpenSubtitles, sigue el paso 3 de la instalación manual.
    OpenCode la leen ahí) y enlázala desde `~/.agents/skills` para Codex:
    - Linux/macOS:
      ```
-     git clone https://github.com/danimagan/bajar-subtitulos-esp ~/.claude/skills/bajar-subtitulos-esp
+     git clone https://github.com/subtitulos-castellano/bajar-subtitulos-esp ~/.claude/skills/bajar-subtitulos-esp
      mkdir -p ~/.agents/skills
      ln -s ~/.claude/skills/bajar-subtitulos-esp ~/.agents/skills/bajar-subtitulos-esp
      ```
    - Windows (PowerShell; la unión de directorios no necesita permisos de administrador):
      ```
-     git clone https://github.com/danimagan/bajar-subtitulos-esp "$HOME\.claude\skills\bajar-subtitulos-esp"
+     git clone https://github.com/subtitulos-castellano/bajar-subtitulos-esp "$HOME\.claude\skills\bajar-subtitulos-esp"
      New-Item -ItemType Directory -Force "$HOME\.agents\skills" | Out-Null
      New-Item -ItemType Junction -Path "$HOME\.agents\skills\bajar-subtitulos-esp" -Target "$HOME\.claude\skills\bajar-subtitulos-esp"
      ```
