@@ -32,7 +32,7 @@ from babelfish import Language
 from guessit import guessit
 from subliminal import region, refine, scan_video
 from subliminal.core import ProviderPool
-from subliminal.score import compute_score
+from subliminal.score import compute_score, episode_scores, movie_scores
 from subliminal.video import Episode
 
 HOME = Path.home() / '.subtitulos-esp'
@@ -65,6 +65,19 @@ ESPANA_NOMBRE = re.compile(r'\b(es|esp|españa|spain|castellano|castilian|europe
 
 RANGO = {None: 0, 'otro': 0, 'ingles': 1, 'latino': 2, 'castellano': 3}
 ETIQUETA = {'castellano': 'CASTELLANO', 'latino': 'LATINO', 'ingles': 'INGLÉS'}
+
+
+# Coincidencias de la puntuación de subliminal que indican que el subtítulo va sincronizado:
+# el mismo archivo (hash) o el mismo release (grupo, plataforma, fps). El resto (source,
+# resolución, códecs: 1-4 puntos) apenas dice nada de la sincronía.
+SINCRONIA = ('hash', 'release_group', 'streaming_service', 'fps')
+
+
+def sincronia(sub, video):
+    """Parte de la puntuación de subliminal que indica sincronía con este vídeo."""
+    pesos = episode_scores if isinstance(video, Episode) else movie_scores
+    coincidencias = sub.get_matches(video)
+    return sum(pesos[m] for m in SINCRONIA if m in coincidencias)
 
 
 def dialecto(texto):
@@ -679,20 +692,24 @@ def main():
                 ep_ok = episodio_correcto(sub, video)
                 dur_ok = duracion_ok(texto, video)
                 score = compute_score(sub, video)
-                print(f'  {sub.provider_name:13} id={sub.id} score={score} españa={es} latino={la} '
-                      f'episodio_ok={ep_ok} duración_ok={dur_ok}', flush=True)
+                sinc = sincronia(sub, video)
+                print(f'  {sub.provider_name:13} id={sub.id} score={score} sincronía={sinc} '
+                      f'españa={es} latino={la} episodio_ok={ep_ok} duración_ok={dur_ok}', flush=True)
                 if not (ep_ok and dur_ok):
                     continue
-                (castellanos if ok else latinos).append((score, es, sub, texto))
+                (castellanos if ok else latinos).append((sinc, es, score, sub, texto))
 
             if castellanos:
-                score, es, sub, texto = max(castellanos, key=lambda c: (c[0], c[1]))
+                # 1) sincronía (mismo archivo > mismo release), 2) más señales de castellano,
+                # 3) puntuación de subliminal. Antes mandaba la puntuación y un +2 por coincidir
+                # en resolución y códec ganaba a un candidato con 5 veces más señales.
+                sinc, es, score, sub, texto = max(castellanos, key=lambda c: (c[0], c[1], c[2]))
                 aplicar('castellano', texto, 'CASTELLANO', f'{sub.provider_name} {sub.id}')
             elif emb['latino'] and not args.solo_castellano:
                 # La pista incrustada va sincronizada exactamente con el vídeo: mejor que una web.
                 aplicar('latino', emb['latino'][0], 'LATINO (incrustado)', emb['latino'][1][:30])
             elif latinos and not args.solo_castellano:
-                score, es, sub, texto = max(latinos, key=lambda c: (c[0], c[1]))
+                sinc, es, score, sub, texto = max(latinos, key=lambda c: (c[0], c[2]))
                 aplicar('latino', texto, 'LATINO', f'{sub.provider_name} {sub.id}')
             elif RANGO[actual] >= RANGO['ingles'] and (not args.force or RANGO[actual] > RANGO['ingles']):
                 # Ya hay latino o inglés y no se ha encontrado nada mejor: se deja como está.

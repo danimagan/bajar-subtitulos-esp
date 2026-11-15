@@ -31,7 +31,9 @@ un `.srt` junto a cada vídeo con su mismo nombre, listo para que el reproductor
     el detector de dialecto.
 - **Varios proveedores** vía [subliminal](https://github.com/Diaoul/subliminal): OpenSubtitles
   (.org, con cuenta opcional), Addic7ed, Gestdown y Subtitulamos.
-  Descarga todos los candidatos en español y se queda con el mejor castellano.
+  Descarga todos los candidatos en español y se queda con el mejor castellano: primero el
+  que se hizo para el mismo archivo o el mismo release (va sincronizado) y, entre los demás,
+  el que tiene más señales de castellano.
 - **Validación de cada candidato**: descarta subtítulos de otro episodio (según el nombre del
   release) o cuya duración no encaja con la del vídeo.
 - **Plan B escalonado**: castellano › latino › inglés. Si solo hay latino, lo guarda (prefiriendo

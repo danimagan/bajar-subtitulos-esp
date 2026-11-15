@@ -109,6 +109,10 @@ Windows, `%USERPROFILE%`), así que funcionan en cualquier equipo sin tocar nada
   latino = `ustedes/computadora/celular/carro/enojado/ahorita...`.
 - **Comprueba episodio y duración**: el script descarta subtítulos cuyo nombre indica otro
   episodio o cuyo último tiempo no encaja con la duración del vídeo.
+- **Cómo elige entre varios castellanos**: 1) sincronía (`sincronía=` en la salida: mismo
+  archivo por hash o mismo release por grupo/plataforma/fps), 2) más señales de castellano
+  (`españa=`), 3) puntuación de subliminal. La puntuación ya no manda: un +2 por coincidir en
+  resolución y códec ganaba a un candidato con 5 veces más señales de castellano.
 - **Addic7ed** es la mejor fuente de castellano para series y funciona sin cuenta
   (ofrece dos versiones en español; la de castellano suele ser `updated/4/...`).
 - **Se usa opensubtitles.org** (proveedor `opensubtitles` en subliminal), no opensubtitles.com:
