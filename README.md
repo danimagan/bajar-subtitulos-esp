@@ -30,7 +30,7 @@ un `.srt` junto a cada vídeo con su mismo nombre, listo para que el reproductor
     como "LA", "Latino", "España"…). En pistas oficiales la etiqueta latina prevalece sobre
     el detector de dialecto.
 - **Varios proveedores** vía [subliminal](https://github.com/Diaoul/subliminal): OpenSubtitles
-  (.org, con cuenta opcional), Addic7ed, Gestdown, Podnapisi, Subtitulamos y TVsubtitles.
+  (.org, con cuenta opcional), Addic7ed, Gestdown y Subtitulamos.
   Descarga todos los candidatos en español y se queda con el mejor castellano.
 - **Validación de cada candidato**: descarta subtítulos de otro episodio (según el nombre del
   release) o cuya duración no encaja con la del vídeo.

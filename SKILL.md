@@ -112,6 +112,12 @@ Windows, `%USERPROFILE%`), así que funcionan en cualquier equipo sin tocar nada
   (ofrece dos versiones en español; la de castellano suele ser `updated/4/...`).
 - **Se usa opensubtitles.org** (proveedor `opensubtitles` en subliminal), no opensubtitles.com:
   son cuentas distintas, y el login en .com exige nombre de usuario, no email.
-- **Subtitulamos** (web española) no tiene todo el catálogo; Podnapisi/TVsubtitles suelen dar latino.
+- **Subtitulamos** (web española) no tiene todo el catálogo.
+- **Podnapisi y TVsubtitles se quitaron** (2026): el dominio de Podnapisi dejó de resolver y
+  la búsqueda de TVsubtitles responde 403 a programas; además, ambos solían dar latino. Si
+  algún proveedor falla siempre, compruébalo aparte (DNS, código HTTP) antes de tocar el
+  script; no intentes saltarte un bloqueo (cambiar user agent, etc.).
+- El aviso "Provider opensubtitles improperly terminated" es inofensivo (falla el cierre
+  de sesión, no la búsqueda); el script lo oculta junto con los avisos de knowit.
 - Los archivos de OpenSubtitles .org a veces vienen en Latin-1: el script siempre guarda UTF-8.
 - Dos versiones del mismo episodio (p. ej. WEB y WEBRip) suelen compartir subtítulo.

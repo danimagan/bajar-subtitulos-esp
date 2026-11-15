@@ -41,7 +41,9 @@ MKV_EXT = {'.mkv'}
 MP4_EXT = {'.mp4', '.m4v', '.mov'}
 # opensubtitlescom queda fuera: se usa la cuenta de opensubtitles.org (son cuentas distintas).
 # subtis (Argentina) y napiprojekt (polaco) no aportan castellano.
-PROVIDERS = ['opensubtitles', 'addic7ed', 'gestdown', 'podnapisi', 'subtitulamos', 'tvsubtitles']
+# podnapisi: el dominio dejó de resolver en 2026 (podnapisi.net sin registro A, www sin DNS).
+# tvsubtitles: la búsqueda (search.php) responde 403 a programas. Además, ambos daban latino.
+PROVIDERS = ['opensubtitles', 'addic7ed', 'gestdown', 'subtitulamos']
 
 ES_RE = re.compile(
     r'\b(vosotr[oa]s|vuestr[oa]s?|os|vale(?!\s+la\s+pena)|chaval\w*|leches|ordenador\w*|móvil\w*'
@@ -562,13 +564,20 @@ def guardar(texto, destino):
 class SinRuido(logging.Filter):
     """subliminal escribe trazas largas en stderr y el refinador omdb da 401 siempre.
 
-    Se descartan los fallos de refinado (no cambian el resultado) y del resto de avisos se
-    deja una sola línea, sin traza. Así la salida es limpia en cualquier shell y agente
-    sin tener que filtrarla con grep / Where-Object.
+    Se descartan, porque no cambian el resultado:
+    - los fallos de refinado (omdb...);
+    - el cierre de sesión de opensubtitles.org (el servidor ya no tiene el método
+      `close`, pero la búsqueda y las descargas funcionan);
+    - los avisos de knowit (largos banners de "ffprobe/mkvmerge not found": el script lee
+      las pistas MKV/MP4 por su cuenta y no necesita esos programas).
+    Del resto de avisos se deja una sola línea, sin traza. Así la salida es limpia en
+    cualquier shell y agente sin tener que filtrarla con grep / Where-Object.
     """
 
     def filter(self, record):
-        if 'Failed to refine' in record.getMessage():
+        mensaje = record.getMessage()
+        if (record.name.startswith('knowit') or 'Failed to refine' in mensaje
+                or 'improperly terminated' in mensaje):
             return False
         record.exc_info = record.exc_text = None
         return True
